@@ -14,12 +14,16 @@
 
 package com.antgroup.geaflow.cluster.web.metrics;
 
+import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.HTTP_REST_SERVICE_ENABLE;
 import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.METRIC_SERVICE_PORT;
 
 import com.antgroup.geaflow.cluster.rpc.RpcService;
 import com.antgroup.geaflow.cluster.rpc.impl.MetricEndpoint;
 import com.antgroup.geaflow.cluster.rpc.impl.RpcServiceImpl;
 import com.antgroup.geaflow.common.config.Configuration;
+import com.antgroup.geaflow.common.rpc.ConfigurableServerOption;
+import com.antgroup.geaflow.common.utils.PortUtil;
+import com.baidu.brpc.server.RpcServerOptions;
 import java.io.Serializable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,24 +31,42 @@ import org.slf4j.LoggerFactory;
 public class MetricServer implements Serializable {
     private static final Logger LOGGER = LoggerFactory.getLogger(MetricServer.class);
 
-    private final RpcService rpcService;
+    private final int port;
+    private RpcService rpcService;
 
     public MetricServer(Configuration configuration) {
-        int port = configuration.getInteger(METRIC_SERVICE_PORT);
-        RpcServiceImpl rpcService = new RpcServiceImpl(port, configuration);
-        rpcService.addEndpoint(new MetricEndpoint(configuration));
-        this.rpcService = rpcService;
+        this.port = configuration.getInteger(METRIC_SERVICE_PORT);
+        if (configuration.getBoolean(HTTP_REST_SERVICE_ENABLE)) {
+            RpcServerOptions serverOptions = getServerOptions(configuration);
+            RpcServiceImpl rpcService = new RpcServiceImpl(PortUtil.getPort(port), serverOptions);
+            rpcService.addEndpoint(new MetricEndpoint(configuration));
+            this.rpcService = rpcService;
+        }
+    }
+
+    private RpcServerOptions getServerOptions(Configuration configuration) {
+        RpcServerOptions serverOptions = ConfigurableServerOption.build(configuration);
+        serverOptions.setGlobalThreadPoolSharing(false);
+        serverOptions.setIoThreadNum(1);
+        serverOptions.setWorkThreadNum(2);
+        return serverOptions;
     }
 
     public int start() {
-        int metricPort = rpcService.startService();
-        LOGGER.info("started metric service on port:{}", metricPort);
-        return metricPort;
+        if (rpcService != null) {
+            int metricPort = rpcService.startService();
+            LOGGER.info("started metric service on port:{}", metricPort);
+            return metricPort;
+        } else {
+            return port;
+        }
     }
 
     public void stop() {
-        LOGGER.info("stopping metric query service");
-        rpcService.stopService();
+        if (rpcService != null) {
+            LOGGER.info("stopping metric query service");
+            rpcService.stopService();
+        }
     }
 
 }

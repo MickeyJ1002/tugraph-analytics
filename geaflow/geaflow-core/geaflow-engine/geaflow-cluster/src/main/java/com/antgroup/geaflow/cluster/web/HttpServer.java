@@ -17,22 +17,28 @@ package com.antgroup.geaflow.cluster.web;
 import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.MASTER_HTTP_PORT;
 
 import com.antgroup.geaflow.cluster.clustermanager.IClusterManager;
+import com.antgroup.geaflow.cluster.common.ComponentInfo;
 import com.antgroup.geaflow.cluster.heartbeat.HeartbeatManager;
 import com.antgroup.geaflow.cluster.resourcemanager.IResourceManager;
 import com.antgroup.geaflow.cluster.web.handler.ClusterRestHandler;
 import com.antgroup.geaflow.cluster.web.handler.MasterRestHandler;
 import com.antgroup.geaflow.cluster.web.handler.PipelineRestHandler;
+import com.antgroup.geaflow.cluster.web.handler.ProxyHandler;
 import com.antgroup.geaflow.cluster.web.metrics.MetricFetcher;
 import com.antgroup.geaflow.common.config.Configuration;
 import com.antgroup.geaflow.common.exception.GeaflowRuntimeException;
 import com.antgroup.geaflow.stats.model.MetricCache;
+import java.net.URL;
 import org.eclipse.jetty.server.ConnectionFactory;
 import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.handler.ErrorHandler;
+import org.eclipse.jetty.servlet.DefaultServlet;
+import org.eclipse.jetty.servlet.ErrorPageErrorHandler;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 import org.glassfish.jersey.server.ResourceConfig;
@@ -45,6 +51,8 @@ public class HttpServer {
     private static final Logger LOGGER = LoggerFactory.getLogger(HttpServer.class);
     private static final String SERVER_NAME = "jetty-server";
     private static final int DEFAULT_ACCEPT_QUEUE_SIZE = 8;
+    private static final int HTTP_NOTFOUND_CODE = 404;
+    private static final String STATIC_RESOURCES_FOLDER_PATH = "dist";
 
     private final Server server;
     private final int httpPort;
@@ -52,7 +60,8 @@ public class HttpServer {
     private final ScheduledExecutorScheduler serverExecutor;
 
     public HttpServer(Configuration configuration, IClusterManager clusterManager,
-                      HeartbeatManager heartbeatManager, IResourceManager resourceManager) {
+                      HeartbeatManager heartbeatManager, IResourceManager resourceManager,
+                      ComponentInfo masterInfo) {
         httpPort = configuration.getInteger(MASTER_HTTP_PORT);
         threadPool = new QueuedThreadPool();
         threadPool.setDaemon(true);
@@ -69,14 +78,30 @@ public class HttpServer {
             metricCache);
 
         ResourceConfig resourceConfig = new ResourceConfig();
-        resourceConfig.register(new MasterRestHandler(configuration));
+        resourceConfig.register(new MasterRestHandler(masterInfo, configuration));
         resourceConfig.register(new ClusterRestHandler(clusterManager, heartbeatManager,
             resourceManager, metricFetcher));
         resourceConfig.register(new PipelineRestHandler(metricCache, metricFetcher));
 
         ServletContextHandler handler = new ServletContextHandler(ServletContextHandler.NO_SESSIONS);
         handler.setContextPath("/");
+        handler.addServlet(new ServletHolder(new ProxyHandler()), "/proxy/*");
         handler.addServlet(new ServletHolder(new ServletContainer(resourceConfig)), "/rest/*");
+        handler.addServlet(new ServletHolder(new DefaultServlet()), "/");
+
+        try {
+            URL resourcePath =
+                HttpServer.class.getClassLoader().getResource(STATIC_RESOURCES_FOLDER_PATH);
+            LOGGER.info("Try Loading static resources of path: {}", resourcePath);
+            handler.setBaseResource(Resource.newResource(resourcePath));
+        } catch (Exception e) {
+            LOGGER.error("Failed to load static resources. {}", e.getMessage(), e);
+        }
+
+        ErrorPageErrorHandler errorPageHandler = new ErrorPageErrorHandler();
+        errorPageHandler.addErrorPage(HTTP_NOTFOUND_CODE, "/");
+        handler.setErrorHandler(errorPageHandler);
+
         server.setHandler(handler);
 
         serverExecutor = new ScheduledExecutorScheduler("jetty-scheduler", true);

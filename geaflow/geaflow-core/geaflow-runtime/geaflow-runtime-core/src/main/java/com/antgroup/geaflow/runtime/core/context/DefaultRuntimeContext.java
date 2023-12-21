@@ -18,6 +18,7 @@ import com.antgroup.geaflow.api.context.RuntimeContext;
 import com.antgroup.geaflow.common.config.Configuration;
 import com.antgroup.geaflow.common.task.TaskArgs;
 import com.antgroup.geaflow.context.AbstractRuntimeContext;
+import com.antgroup.geaflow.core.graph.ExecutionTask;
 import com.antgroup.geaflow.metrics.common.api.MetricGroup;
 import com.antgroup.geaflow.runtime.shuffle.IoDescriptor;
 import java.util.HashMap;
@@ -28,7 +29,6 @@ public class DefaultRuntimeContext extends AbstractRuntimeContext {
     private long pipelineId;
     private String pipelineName;
     private TaskArgs taskArgs;
-    private long windowId;
     protected IoDescriptor ioDescriptor;
 
     public DefaultRuntimeContext(Configuration jobConfig) {
@@ -70,6 +70,13 @@ public class DefaultRuntimeContext extends AbstractRuntimeContext {
         return this.jobConfig;
     }
 
+    public DefaultRuntimeContext setExecutionTask(ExecutionTask task) {
+        this.taskArgs = new TaskArgs(task.getTaskId(), task.getIndex(),
+            task.getTaskName(), task.getParallelism(),
+            task.getMaxParallelism(), task.getWorkerInfo().getProcessIndex());
+        return this;
+    }
+
     public DefaultRuntimeContext setIoDescriptor(IoDescriptor ioDescriptor) {
         this.ioDescriptor = ioDescriptor;
         return this;
@@ -86,13 +93,8 @@ public class DefaultRuntimeContext extends AbstractRuntimeContext {
     }
 
     public DefaultRuntimeContext setWindowId(long windowId) {
-        this.windowId = windowId;
+        updateWindowId(windowId);
         return this;
-    }
-
-    @Override
-    public long getWindowId() {
-        return windowId;
     }
 
     @Override

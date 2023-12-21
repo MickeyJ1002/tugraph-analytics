@@ -16,22 +16,23 @@ package com.antgroup.geaflow.cluster.rpc;
 
 import com.antgroup.geaflow.cluster.rpc.RpcEndpointRef.RpcCallback;
 import com.antgroup.geaflow.common.heartbeat.Heartbeat;
+import com.antgroup.geaflow.rpc.proto.Master.HeartbeatResponse;
 import com.antgroup.geaflow.rpc.proto.Master.RegisterResponse;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
 import java.io.Serializable;
+import java.util.concurrent.Future;
 
 public interface IMasterEndpointRef extends Serializable {
 
     /**
      * Register container into master.
      */
-    <T> void registerContainer(T request, RpcCallback<RegisterResponse> listener);
+    <T> Future<RegisterResponse> registerContainer(T request, RpcCallback<RegisterResponse> callback);
 
     /**
      * Send heartbeat.
      */
-    ListenableFuture sendHeartBeat(Heartbeat request);
+    Future<HeartbeatResponse> sendHeartBeat(Heartbeat heartbeat, RpcCallback<HeartbeatResponse> callback);
 
     /**
      * Send exception.

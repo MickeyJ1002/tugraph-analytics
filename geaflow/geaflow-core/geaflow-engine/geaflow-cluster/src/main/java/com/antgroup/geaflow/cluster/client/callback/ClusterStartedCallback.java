@@ -15,7 +15,7 @@
 package com.antgroup.geaflow.cluster.client.callback;
 
 import com.antgroup.geaflow.cluster.clustermanager.ClusterInfo;
-import com.antgroup.geaflow.cluster.rpc.RpcAddress;
+import com.antgroup.geaflow.cluster.rpc.ConnectAddress;
 import com.antgroup.geaflow.common.utils.ProcessUtil;
 import java.io.Serializable;
 import java.util.HashMap;
@@ -37,7 +37,7 @@ public interface ClusterStartedCallback extends Serializable {
 
         private String masterAddress;
         private String clientAddress;
-        private Map<String, RpcAddress> driverAddresses;
+        private Map<String, ConnectAddress> driverAddresses;
 
         public ClusterMeta() {
         }
@@ -46,8 +46,8 @@ public interface ClusterStartedCallback extends Serializable {
             this(clusterInfo.getDriverAddresses(), clusterInfo.getMasterAddress().toString());
         }
 
-        public ClusterMeta(Map<String, RpcAddress> addressList, String masterAddress) {
-            this.driverAddresses = new HashMap<>(addressList);
+        public ClusterMeta(Map<String, ConnectAddress> driverAddresses, String masterAddress) {
+            this.driverAddresses = new HashMap<>(driverAddresses);
             this.masterAddress = masterAddress;
             this.clientAddress = ProcessUtil.getHostAndIp();
         }
@@ -60,11 +60,11 @@ public interface ClusterStartedCallback extends Serializable {
             this.masterAddress = masterAddress;
         }
 
-        public Map<String, RpcAddress> getDriverAddresses() {
+        public Map<String, ConnectAddress> getDriverAddresses() {
             return driverAddresses;
         }
 
-        public void setDriverAddresses(Map<String, RpcAddress> driverAddresses) {
+        public void setDriverAddresses(Map<String, ConnectAddress> driverAddresses) {
             this.driverAddresses = driverAddresses;
         }
 

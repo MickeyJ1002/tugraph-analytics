@@ -17,56 +17,40 @@ package com.antgroup.geaflow.cluster.rpc;
 import com.antgroup.geaflow.cluster.protocol.EventType;
 import com.antgroup.geaflow.cluster.protocol.IEvent;
 import com.antgroup.geaflow.cluster.rpc.impl.ContainerEndpointRef;
-import com.antgroup.geaflow.cluster.rpc.impl.RpcMessageEncoder;
+import com.antgroup.geaflow.cluster.rpc.impl.DefaultRpcCallbackImpl;
 import com.antgroup.geaflow.cluster.rpc.impl.RpcServiceImpl;
 import com.antgroup.geaflow.common.config.Configuration;
+import com.antgroup.geaflow.common.encoder.RpcMessageEncoder;
 import com.antgroup.geaflow.common.exception.GeaflowRuntimeException;
+import com.antgroup.geaflow.common.rpc.ConfigurableServerOption;
+import com.antgroup.geaflow.common.utils.PortUtil;
 import com.antgroup.geaflow.common.utils.ProcessUtil;
-import com.antgroup.geaflow.common.utils.ReflectionUtil;
 import com.antgroup.geaflow.common.utils.SleepUtils;
-import com.antgroup.geaflow.rpc.proto.ContainerServiceGrpc;
+import com.antgroup.geaflow.rpc.proto.Container.Request;
+import com.antgroup.geaflow.rpc.proto.Container.Response;
 import com.google.protobuf.Empty;
-import io.grpc.ManagedChannel;
-import io.grpc.stub.StreamObserver;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
 public class AsyncRpcTest {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AsyncRpcTest.class);
 
-    private Server server;
-
-    @BeforeMethod
-    public void setup() {
-        server = new Server();
-        server.startServer();
-    }
-
-    @AfterMethod
-    public void cleanUp() {
-        if (server != null) {
-            server.stopServer();
-        }
-    }
-
     @Test
     public void testAsyncRpc() throws Exception {
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
+
+        Server server = new Server();
+        server.startServer();
         String host = ProcessUtil.getHostIp();
         ContainerEndpointRef client = new ContainerEndpointRef(host, server.rpcPort,
-            executorService);
+            new Configuration());
 
         int eventCount = 100;
         List<IEvent> request = new ArrayList<>();
@@ -74,54 +58,50 @@ public class AsyncRpcTest {
         for (int i = 0; i < eventCount; i++) {
             IEvent event = new TestEvent(i);
             request.add(event);
-            events.add(client.process(event));
+            events.add(new RpcResponseFuture(client.process(event, new DefaultRpcCallbackImpl<>())));
         }
         validateResult(events, eventCount, 5000);
         LOGGER.info("send event finish");
     }
 
-    @Test(expectedExceptions = ExecutionException.class)
+    @Test
     public void testShutdownChannel() throws Exception {
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
+        Server server = new Server();
+        server.startServer();
         String host = ProcessUtil.getHostIp();
         ContainerEndpointRef client = new ContainerEndpointRef(host, server.rpcPort,
-            executorService);
-
-        Thread thread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                SleepUtils.sleepMilliSecond(300);
-                LOGGER.info("shutdown channel");
-                ManagedChannel channel = (ManagedChannel) ReflectionUtil.getField(client,
-                    "channel");
-                channel.shutdownNow();
-                LOGGER.info("shutdown channel finish ");
-            }
-        });
-        thread.start();
+            new Configuration());
 
         int eventCount = 1000;
-        List<IEvent> request = new ArrayList<>();
-        List<Future<IEvent>> events = new ArrayList<>();
+        List<Integer> eventIds = new ArrayList<>();
+        List<Integer> processedIds = new ArrayList<>();
         for (int i = 0; i < eventCount; i++) {
             TestEvent event = new TestEvent(i);
-            request.add(event);
-            event.processTimeMs = 100;
-            SleepUtils.sleepMilliSecond(1);
+            event.processTimeMs = 1;
+            Future<IEvent> future = new RpcResponseFuture(client.process(event, new DefaultRpcCallbackImpl<>()));
+            processedIds.add(((TestEvent) (future.get(1000, TimeUnit.MILLISECONDS))).id);
+            eventIds.add(i);
+            // Do shutdown.
             if (i % 100 == 0) {
+                LOGGER.info("shutdown channel");
+                server.stopServer();
+                LOGGER.info("shutdown channel finish");
+                SleepUtils.sleepMilliSecond(10);
             }
-            events.add(client.process(event));
         }
-        validateResult(events, eventCount, 5000);
+
+        Assert.assertEquals(processedIds, eventIds);
         LOGGER.info("send event finish");
     }
 
     @Test(expectedExceptions = ExecutionException.class)
     public void testServerError() throws Exception {
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
+
+        Server server = new Server();
+        server.startServer();
         String host = ProcessUtil.getHostIp();
         ContainerEndpointRef client = new ContainerEndpointRef(host, server.rpcPort,
-            executorService);
+            new Configuration());
 
         int eventCount = 100;
         List<Future<IEvent>> results = new ArrayList<>();
@@ -130,7 +110,7 @@ public class AsyncRpcTest {
             if (i == 50) {
                 event.isException = true;
             }
-            results.add(client.process(event));
+            results.add(new RpcResponseFuture(client.process(event, new DefaultRpcCallbackImpl<>())));
         }
         LOGGER.info("send event finish");
         validateResult(results, eventCount, 5000);
@@ -171,7 +151,9 @@ public class AsyncRpcTest {
 
         @Override
         public String toString() {
-            return "TestEvent{" + "id=" + id + '}';
+            return "TestEvent{" +
+                "id=" + id +
+                '}';
         }
     }
 
@@ -183,7 +165,8 @@ public class AsyncRpcTest {
         protected RpcServiceImpl rpcService;
 
         public void startServer() {
-            this.rpcService = new RpcServiceImpl(0, configuration);
+            this.rpcService = new RpcServiceImpl(PortUtil.getPort(rpcPort),
+                ConfigurableServerOption.build(configuration));
             this.rpcService.addEndpoint(new MockContainerEndpoint());
             this.rpcPort = rpcService.startService();
         }
@@ -196,14 +179,13 @@ public class AsyncRpcTest {
     /**
      * Mock endpoint to process events.
      */
-    public class MockContainerEndpoint extends
-        ContainerServiceGrpc.ContainerServiceImplBase implements RpcEndpoint {
+    public class MockContainerEndpoint implements IContainerEndpoint {
 
         public MockContainerEndpoint() {
         }
 
-        public void process(com.antgroup.geaflow.rpc.proto.Container.Request request,
-                            StreamObserver<com.antgroup.geaflow.rpc.proto.Container.Response> responseObserver) {
+        @Override
+        public Response process(Request request) {
             try {
                 IEvent event = RpcMessageEncoder.decode(request.getPayload());
                 if (((TestEvent) event).processTimeMs > 0) {
@@ -211,28 +193,27 @@ public class AsyncRpcTest {
                 }
                 if (((TestEvent) event).isException) {
                     LOGGER.info("on error: mock exception");
-                    responseObserver.onError(new GeaflowRuntimeException("occur mock exception"));
+                    throw new GeaflowRuntimeException("occur mock exception");
                 } else {
                     com.antgroup.geaflow.rpc.proto.Container.Response.Builder builder =
                         com.antgroup.geaflow.rpc.proto.Container.Response.newBuilder();
                     builder.setPayload(request.getPayload());
-                    responseObserver.onNext(builder.build());
-                    responseObserver.onCompleted();
+                    return builder.build();
                 }
             } catch (Throwable t) {
                 LOGGER.error("process request failed: {}", t.getMessage(), t);
-                responseObserver.onError(t);
+                throw new GeaflowRuntimeException("process request failed", t);
             }
         }
 
-        public void close(Empty request, StreamObserver<Empty> responseObserver) {
+        @Override
+        public Empty close(Empty request) {
             try {
                 LOGGER.info("close");
-                responseObserver.onNext(Empty.newBuilder().build());
-                responseObserver.onCompleted();
+                return Empty.newBuilder().build();
             } catch (Throwable t) {
                 LOGGER.error("close failed: {}", t.getMessage(), t);
-                responseObserver.onError(t);
+                throw new GeaflowRuntimeException(String.format("close failed: %s", t.getMessage()), t);
             }
         }
     }

@@ -59,6 +59,8 @@ public final class K8SConstants {
 
     public static final String LABEL_APP_KEY = "app";
 
+    public static final String LABEL_CONFIG_MAP_LOCK = "config-map-lock";
+
     public static final String LABEL_COMPONENT_KEY = "component";
 
     public static final String LABEL_COMPONENT_MASTER = "master";
@@ -77,21 +79,11 @@ public final class K8SConstants {
 
     public static final String RESOURCE_NAME_EPHEMERAL_STORAGE = "ephemeral-storage";
 
-    public static final String RESOURCE_NAME_PERSISTENT_VOLUME = "pv";
-
     public static final String POD_RESTART_POLICY = "Always";
 
     public static final String HOST_ALIASES_CONFIG_MAP_NAME = "host-aliases";
 
     public static final String HOST_NETWORK_DNS_POLICY = "ClusterFirstWithHostNet";
-
-    public static final String SLS_DISKLESS_TAGS_KEY = "ALIYUN_LOG_ENV_TAGS";
-
-    public static final String SLS_DISKLESS_TAGS_COMPONENT_KEY = "component";
-
-    public static final String SLS_DISKLESS_TAGS_APP_KEY = "app";
-
-    public static final String SLS_DISKLESS_TAGS_POD_KEY = "pod";
 
     public static final String TCP_PROTOCOL = "TCP";
 
@@ -113,11 +105,7 @@ public final class K8SConstants {
     public static final String ENV_NAMESPACE = "NAMESPACE";
     public static final String NAMESPACE_FIELD_PATH = "metadata.namespace";
 
-    public static final String DIRECTORY_OR_CREATE = "DirectoryOrCreate";
-
     // ----------------------------- Environment Variables ----------------------------
-
-    public static final String ENV_GEAFLOW_CLASSPATH = "GEAFLOW_CLASSPATH";
 
     public static final String ENV_CONF_DIR = "GEAFLOW_CONF_DIR";
 
@@ -143,31 +131,26 @@ public final class K8SConstants {
 
     public static final String ENV_CONTAINER_INDEX = "GEAFLOW_CONTAINER_INDEX";
 
-    public static final String ENV_CONTAINER_TYPE = "CONTAINER_TYPE";
-
-    public static final String ENV_CONTAINER_TYPE_K8S = "K8S";
-
     public static final String ENV_IS_RECOVER = "GEAFLOW_IS_RECOVER";
+
+    public static final String ENV_AUTO_RESTART = "GEAFLOW_AUTO_RESTART";
 
     public static final String ENV_CLUSTER_ID = "GEAFLOW_CLUSTER_ID";
 
     public static final String ENV_CLUSTER_FAULT_INJECTION_ENABLE =
         "GEAFLOW_CLUSTER_FAULT_INJECTION_ENABLE";
 
-    public static final String ENV_AUTO_RESTART = "GEAFLOW_AUTO_RESTART";
-
     public static final String ENV_MASTER_ID = "GEAFLOW_MASTER_ID";
 
     public static final String ENV_CONFIG_FILE = "geaflow-conf.yml";
-
-    public static final String CONFIG_FILE_LOG4J_NAME = "log4j.properties";
+    public static final String ENV_PROFILER_PATH = "ASYNC_PROFILER_SHELL_PATH";
 
     public static final String GEAFLOW_CONF_VOLUME = "geaflow-conf-volume";
 
     public static final String GEAFLOW_LOG_VOLUME = "geaflow-log-volume";
 
-    public static final String GEAFLOW_FILE_VOLUME = "geaflow-file-volume";
+    public static final String MASTER_ADDRESS = "geaflow.master.address";
 
-    public static final int EXIT_WAIT_TIME = 5;
+    public static final String JOB_CLASSPATH = "$GEAFLOW_CLASSPATH";
 
 }

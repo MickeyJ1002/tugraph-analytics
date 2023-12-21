@@ -18,20 +18,19 @@ import static com.antgroup.geaflow.cluster.k8s.config.K8SConstants.ADDRESS_SEPAR
 import static com.antgroup.geaflow.cluster.k8s.config.K8SConstants.CONFIG_KV_SEPARATOR;
 import static com.antgroup.geaflow.cluster.k8s.config.K8SConstants.CONFIG_LIST_SEPARATOR;
 import static com.antgroup.geaflow.cluster.k8s.config.K8SConstants.DRIVER_SERVICE_NAME_SUFFIX;
+import static com.antgroup.geaflow.cluster.k8s.config.K8SConstants.MASTER_ADDRESS;
 import static com.antgroup.geaflow.cluster.k8s.config.KubernetesConfigKeys.SERVICE_SUFFIX;
 import static com.antgroup.geaflow.cluster.k8s.config.KubernetesConfigKeys.USE_IP_IN_HOST_NETWORK;
-import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.MASTER_RPC_HOST;
 
 import com.antgroup.geaflow.cluster.k8s.config.K8SConstants;
 import com.antgroup.geaflow.cluster.k8s.config.KubernetesConfig;
 import com.antgroup.geaflow.cluster.k8s.config.KubernetesConfigKeys;
-import com.antgroup.geaflow.cluster.rpc.RpcAddress;
+import com.antgroup.geaflow.cluster.rpc.ConnectAddress;
 import com.antgroup.geaflow.common.config.ConfigKey;
 import com.antgroup.geaflow.common.config.Configuration;
 import com.antgroup.geaflow.common.utils.SleepUtils;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.HostAlias;
 import io.fabric8.kubernetes.api.model.NodeSelectorRequirement;
@@ -61,42 +60,12 @@ public class KubernetesUtils {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KubernetesUtils.class);
 
-    public static String getContentFromFile(String filePath) {
-        File file = new File(filePath);
-        if (file.exists()) {
-            StringBuilder content = new StringBuilder();
-            String line;
-            try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(new FileInputStream(file)))) {
-                while ((line = reader.readLine()) != null) {
-                    content.append(line).append(System.lineSeparator());
-                }
-            } catch (IOException e) {
-                throw new RuntimeException("Error read file content.", e);
-            }
-            return content.toString();
-        }
-        return null;
-    }
-
     private static InetAddress resolveServiceAddress(String serviceName) {
         try {
             return InetAddress.getByName(serviceName);
         } catch (UnknownHostException e) {
             return null;
         }
-    }
-
-    /**
-     * This method is an adaptation of Flink's.
-     * org.apache.flink.runtime.clusterframework.BootstrapTools#getStartCommand.
-     */
-    public static String getContainerStartCommand(String template,
-                                                  Map<String, String> startCommandValues) {
-        for (Map.Entry<String, String> variable : startCommandValues.entrySet()) {
-            template = template.replace("%" + variable.getKey() + "%", variable.getValue());
-        }
-        return template;
     }
 
     public static Map<String, String> getPairsConf(Configuration config, ConfigKey configKey) {
@@ -170,19 +139,20 @@ public class KubernetesUtils {
     public static Configuration loadConfiguration() throws Exception {
         Configuration config = loadConfigurationFromFile();
 
-        KubernetesConfig.DockerNetworkType dockerNetworkType = KubernetesConfig
-            .getDockerNetworkType(config);
+        KubernetesConfig.DockerNetworkType dockerNetworkType =
+            KubernetesConfig.getDockerNetworkType(
+            config);
 
         // Wait for service to be resolved.
         String serviceIp = waitForServiceNameResolved(config, false).getHostAddress();
-        config.put(MASTER_RPC_HOST, serviceIp);
+        config.put(MASTER_ADDRESS, serviceIp);
         if (dockerNetworkType == KubernetesConfig.DockerNetworkType.HOST) {
             try {
                 InetAddress addr = InetAddress.getLocalHost();
                 if (config.getBoolean(USE_IP_IN_HOST_NETWORK)) {
-                    config.put(MASTER_RPC_HOST, serviceIp);
+                    config.put(MASTER_ADDRESS, serviceIp);
                 } else {
-                    config.put(MASTER_RPC_HOST, addr.getHostName());
+                    config.put(MASTER_ADDRESS, addr.getHostName());
                 }
             } catch (UnknownHostException e) {
                 LOGGER.warn("Get hostname for master error {}.", e.getMessage());
@@ -201,8 +171,8 @@ public class KubernetesUtils {
         final File confDirFile = new File(configDir);
         if (!(confDirFile.exists())) {
             throw new RuntimeException(
-                "The given configuration directory name '" + configDir + "' (" + confDirFile
-                    .getAbsolutePath() + ") does not describe an existing directory.");
+                "The given configuration directory name '" + configDir + "' ("
+                    + confDirFile.getAbsolutePath() + ") does not describe an existing directory.");
         }
 
         // get yaml configuration file
@@ -218,7 +188,8 @@ public class KubernetesUtils {
     }
 
     /**
-     * This method is an adaptation of Flink's org.apache.flink.configuration.GlobalConfiguration#loadYAMLResource
+     * This method is an adaptation of Flink's
+     * org.apache.flink.configuration.GlobalConfiguration#loadYAMLResource
      */
     @VisibleForTesting
     public static Configuration loadYAMLResource(File file) {
@@ -242,8 +213,9 @@ public class KubernetesUtils {
 
                     String[] kv = conf.split(CONFIG_KV_SEPARATOR, 2);
                     if (kv.length < 1) {
-                        LOGGER.warn("Error while trying to split key and value in configuration file "
-                            + file + ":" + lineNo + ": \"" + line + "\"");
+                        LOGGER.warn(
+                            "Error while trying to split key and value in configuration file "
+                                + file + ":" + lineNo + ": \"" + line + "\"");
                         continue;
                     }
 
@@ -252,8 +224,9 @@ public class KubernetesUtils {
 
                     // sanity check
                     if (key.length() == 0) {
-                        LOGGER.warn("Error after splitting key in configuration file " + file
-                            + ":" + lineNo + ": \"" + line + "\"");
+                        LOGGER.warn(
+                            "Error after splitting key in configuration file " + file + ":" + lineNo
+                                + ": \"" + line + "\"");
                         continue;
                     }
 
@@ -292,12 +265,6 @@ public class KubernetesUtils {
         return serviceAddress;
     }
 
-    public static String getEnvValue(Map<String, String> env, String envKey) {
-        // Infer the resource identifier from the environment variable
-        String value = env.get(envKey);
-        Preconditions.checkArgument(value != null, "%s is not set", envKey);
-        return value;
-    }
 
     public static List<Toleration> getTolerations(Configuration config) {
         List<Toleration> tolerationList = new ArrayList<>();
@@ -365,14 +332,15 @@ public class KubernetesUtils {
     }
 
     public static String encodeRpcAddressMap(Map<String, ?> addressMap) {
-        return Joiner.on(CONFIG_LIST_SEPARATOR).withKeyValueSeparator(ADDRESS_SEPARATOR).join(addressMap);
+        return Joiner.on(CONFIG_LIST_SEPARATOR).withKeyValueSeparator(ADDRESS_SEPARATOR)
+            .join(addressMap);
     }
 
-    public static Map<String, RpcAddress> decodeRpcAddressMap(String str) {
-        Map<String, RpcAddress> map = new HashMap<>();
+    public static Map<String, ConnectAddress> decodeRpcAddressMap(String str) {
+        Map<String, ConnectAddress> map = new HashMap<>();
         for (String entry : str.trim().split(CONFIG_LIST_SEPARATOR)) {
             String[] pair = entry.split(ADDRESS_SEPARATOR);
-            map.put(pair[0], RpcAddress.build(pair[1]));
+            map.put(pair[0], ConnectAddress.build(pair[1]));
         }
         return map;
     }
@@ -388,4 +356,5 @@ public class KubernetesUtils {
     public static String getDriverServiceName(String clusterId, int driverIndex) {
         return clusterId + DRIVER_SERVICE_NAME_SUFFIX + driverIndex;
     }
+
 }

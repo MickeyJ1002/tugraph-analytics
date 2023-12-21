@@ -33,12 +33,14 @@ import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.DRIVER
 import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.FO_ENABLE;
 import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.FO_MAX_RESTARTS;
 import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.FO_STRATEGY;
+import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.FO_TIMEOUT_MS;
 import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.MASTER_DISK_GB;
 import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.MASTER_JVM_OPTIONS;
 import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.MASTER_MEMORY_MB;
 import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.MASTER_VCORES;
-import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.REGISTER_TIMEOUT;
+import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.SUPERVISOR_JVM_OPTIONS;
 
+import com.antgroup.geaflow.cluster.client.utils.PipelineUtil;
 import com.antgroup.geaflow.cluster.failover.FailoverStrategyType;
 import com.antgroup.geaflow.common.config.Configuration;
 import com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys;
@@ -47,7 +49,6 @@ import java.io.Serializable;
 
 public class ClusterConfig implements Serializable {
 
-    public static final String MASTER_ADDRESS = "geaflow.master.address";
     private static final double DEFAULT_HEAP_FRACTION = 0.8;
 
     private int containerNum;
@@ -76,6 +77,7 @@ public class ClusterConfig implements Serializable {
     private boolean isFoEnable;
     private int maxRestarts;
     private Configuration config;
+    private ClusterJvmOptions supervisorJvmOptions;
 
     public static ClusterConfig build(Configuration config) {
         ClusterConfig clusterConfig = new ClusterConfig();
@@ -104,7 +106,9 @@ public class ClusterConfig implements Serializable {
         clusterConfig.setDriverVcores(config.getDouble(DRIVER_VCORES));
 
         int driverNum = config.getInteger(DRIVER_NUM);
-        Preconditions.checkArgument(driverNum == 1, "only one driver is allowed");
+        Preconditions.checkArgument(
+            driverNum == 1 || driverNum > 1 && PipelineUtil.isAsync(config),
+            "only one driver is allowed in no-share mode");
         clusterConfig.setDriverNum(driverNum);
 
         clusterConfig.setContainerMemoryMB(config.getInteger(CONTAINER_MEMORY_MB));
@@ -125,6 +129,10 @@ public class ClusterConfig implements Serializable {
         }
         clusterConfig.setContainerJvmOptions(containerJvmOptions);
         config.put(CONTAINER_HEAP_SIZE_MB, String.valueOf(containerJvmOptions.getMaxHeapMB()));
+
+        ClusterJvmOptions supervisorJvmOptions =
+            ClusterJvmOptions.build(config.getString(SUPERVISOR_JVM_OPTIONS));
+        clusterConfig.setSupervisorJvmOptions(supervisorJvmOptions);
 
         boolean isFoEnabled = config.getBoolean(FO_ENABLE);
         clusterConfig.setFoEnable(isFoEnabled);
@@ -318,8 +326,17 @@ public class ClusterConfig implements Serializable {
     }
 
     public int getDriverRegisterTimeoutSec() {
-        return config.getInteger(REGISTER_TIMEOUT);
+        return config.getInteger(FO_TIMEOUT_MS) / 1000;
     }
+
+    public ClusterJvmOptions getSupervisorJvmOptions() {
+        return supervisorJvmOptions;
+    }
+
+    public void setSupervisorJvmOptions(ClusterJvmOptions supervisorJvmOptions) {
+        this.supervisorJvmOptions = supervisorJvmOptions;
+    }
+
 
     @Override
     public String toString() {

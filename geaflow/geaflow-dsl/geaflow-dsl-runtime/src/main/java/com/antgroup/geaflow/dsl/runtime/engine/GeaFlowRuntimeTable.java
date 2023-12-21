@@ -27,10 +27,13 @@ import com.antgroup.geaflow.api.pdata.PStreamSink;
 import com.antgroup.geaflow.api.pdata.stream.window.PWindowStream;
 import com.antgroup.geaflow.common.config.Configuration;
 import com.antgroup.geaflow.common.config.keys.DSLConfigKeys;
+import com.antgroup.geaflow.common.mode.JobMode;
 import com.antgroup.geaflow.common.type.IType;
 import com.antgroup.geaflow.common.utils.ArrayUtil;
 import com.antgroup.geaflow.common.utils.ClassUtil;
 import com.antgroup.geaflow.dsl.common.binary.EncoderFactory;
+import com.antgroup.geaflow.dsl.common.binary.decoder.DefaultRowDecoder;
+import com.antgroup.geaflow.dsl.common.binary.decoder.RowDecoder;
 import com.antgroup.geaflow.dsl.common.binary.encoder.EdgeEncoder;
 import com.antgroup.geaflow.dsl.common.binary.encoder.IBinaryEncoder;
 import com.antgroup.geaflow.dsl.common.binary.encoder.VertexEncoder;
@@ -68,9 +71,10 @@ import com.antgroup.geaflow.dsl.runtime.plan.PhysicRelNode.PhysicRelNodeName;
 import com.antgroup.geaflow.dsl.schema.GeaFlowGraph;
 import com.antgroup.geaflow.dsl.schema.GeaFlowTable;
 import com.antgroup.geaflow.dsl.util.SqlTypeUtil;
-import com.antgroup.geaflow.pipeline.task.IPipelineTaskContext;
+import com.antgroup.geaflow.pipeline.job.IPipelineJobContext;
 import com.google.common.collect.Lists;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -82,11 +86,11 @@ public class GeaFlowRuntimeTable implements RuntimeTable {
 
     private final QueryContext queryContext;
 
-    private final IPipelineTaskContext context;
+    private final IPipelineJobContext context;
 
     private final PWindowStream<Row> pStream;
 
-    public GeaFlowRuntimeTable(QueryContext queryContext, IPipelineTaskContext context,
+    public GeaFlowRuntimeTable(QueryContext queryContext, IPipelineJobContext context,
                                PWindowStream<Row> pStream) {
         this.queryContext = Objects.requireNonNull(queryContext);
         this.context = Objects.requireNonNull(context);
@@ -104,8 +108,13 @@ public class GeaFlowRuntimeTable implements RuntimeTable {
     }
 
     @Override
-    public List<Row> take() {
-        throw new GeaFlowDSLException("take() has not support currently.");
+    public List<Row> take(IType<?> type) {
+        if (JobMode.getJobMode(context.getConfig()).equals(JobMode.OLAP_SERVICE)) {
+            pStream.map(new BinaryRowToObjectMapFunction(type)).collect();
+        } else {
+            pStream.collect();
+        }
+        return new ArrayList<>();
     }
 
     @Override
@@ -246,9 +255,7 @@ public class GeaFlowRuntimeTable implements RuntimeTable {
         return new GeaFlowSinkIncGraphView(context);
     }
 
-    private static class TableProjectFunction extends RichFunction implements MapFunction<Row, Row>, Serializable {
-
-        private boolean skipException;
+    private static class TableProjectFunction implements MapFunction<Row, Row>, Serializable {
 
         private final ProjectFunction projectFunction;
 
@@ -257,32 +264,26 @@ public class GeaFlowRuntimeTable implements RuntimeTable {
         }
 
         @Override
-        public void open(RuntimeContext runtimeContext) {
-            this.skipException = runtimeContext.getConfiguration()
-                .getBoolean(DSLConfigKeys.GEAFLOW_DSL_SKIP_EXCEPTION);
-        }
-
-        @Override
         public Row map(Row value) {
-            try {
-                return projectFunction.project(value);
-            } catch (Exception e) {
-                if (!skipException) {
-                    throw new GeaFlowDSLException(e);
-                }
-                return null;
-            }
-        }
-
-        @Override
-        public void close() {
-
+            return projectFunction.project(value);
         }
     }
 
-    private static class TableFilterFunction extends RichFunction implements FilterFunction<Row> {
+    private static class BinaryRowToObjectMapFunction implements MapFunction<Row, Row>, Serializable {
 
-        private boolean skipException;
+        private final RowDecoder rowDecoder;
+
+        public BinaryRowToObjectMapFunction(IType<?> schema) {
+            this.rowDecoder = new DefaultRowDecoder((StructType) schema);
+        }
+
+        @Override
+        public Row map(Row row) {
+            return rowDecoder.decode(row);
+        }
+    }
+
+    private static class TableFilterFunction implements FilterFunction<Row> {
 
         private final WhereFunction whereFunction;
 
@@ -291,26 +292,8 @@ public class GeaFlowRuntimeTable implements RuntimeTable {
         }
 
         @Override
-        public void open(RuntimeContext runtimeContext) {
-            this.skipException = runtimeContext.getConfiguration()
-                .getBoolean(DSLConfigKeys.GEAFLOW_DSL_SKIP_EXCEPTION);
-        }
-
-        @Override
         public boolean filter(Row record) {
-            try {
-                return whereFunction.filter(record);
-            } catch (Exception e) {
-                if (!skipException) {
-                    throw new GeaFlowDSLException(e);
-                }
-                return false;
-            }
-        }
-
-        @Override
-        public void close() {
-
+            return whereFunction.filter(record);
         }
     }
 

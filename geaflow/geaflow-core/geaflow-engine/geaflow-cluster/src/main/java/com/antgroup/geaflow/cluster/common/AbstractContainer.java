@@ -14,11 +14,14 @@
 
 package com.antgroup.geaflow.cluster.common;
 
+import static com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys.SUPERVISOR_RPC_PORT;
+
 import com.antgroup.geaflow.cluster.exception.ExceptionClient;
 import com.antgroup.geaflow.cluster.exception.ExceptionCollectService;
 import com.antgroup.geaflow.cluster.heartbeat.HeartbeatClient;
 import com.antgroup.geaflow.cluster.web.metrics.MetricServer;
 import com.antgroup.geaflow.common.config.Configuration;
+import com.antgroup.geaflow.common.config.keys.ExecutionConfigKeys;
 import com.antgroup.geaflow.common.utils.ProcessUtil;
 import com.antgroup.geaflow.ha.service.ResourceData;
 import com.antgroup.geaflow.shuffle.service.ShuffleManager;
@@ -29,6 +32,7 @@ public abstract class AbstractContainer extends AbstractComponent {
     protected ExceptionCollectService exceptionCollectService;
     protected MetricServer metricServer;
     protected int metricPort;
+    protected int supervisorPort;
 
     public AbstractContainer(int rpcPort) {
         super(rpcPort);
@@ -45,16 +49,18 @@ public abstract class AbstractContainer extends AbstractComponent {
         this.exceptionCollectService = new ExceptionCollectService();
         this.metricServer = new MetricServer(configuration);
         this.metricPort = metricServer.start();
+        this.supervisorPort = configuration.getInteger(SUPERVISOR_RPC_PORT);
     }
 
     protected void registerToMaster() {
-        this.heartbeatClient.registerToMaster(masterId, buildComponentInfo());
+        this.heartbeatClient.init(masterId, buildComponentInfo());
     }
 
     @Override
     protected ResourceData buildResourceData() {
         ResourceData resourceData = super.buildResourceData();
         resourceData.setMetricPort(metricPort);
+        resourceData.setSupervisorPort(supervisorPort);
         return resourceData;
     }
 
@@ -62,13 +68,14 @@ public abstract class AbstractContainer extends AbstractComponent {
 
     protected abstract ComponentInfo buildComponentInfo();
 
-    protected void buildComponentInfo(ComponentInfo componentInfo) {
+    protected void fillComponentInfo(ComponentInfo componentInfo) {
         componentInfo.setId(id);
         componentInfo.setName(name);
         componentInfo.setHost(ProcessUtil.getHostIp());
         componentInfo.setPid(ProcessUtil.getProcessId());
         componentInfo.setRpcPort(rpcPort);
         componentInfo.setMetricPort(metricPort);
+        componentInfo.setAgentPort(configuration.getInteger(ExecutionConfigKeys.AGENT_HTTP_PORT));
     }
 
     public void close() {

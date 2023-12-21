@@ -15,7 +15,7 @@
 package com.antgroup.geaflow.cluster.k8s.entrypoint;
 
 import static com.antgroup.geaflow.cluster.constants.ClusterConstants.CLUSTER_TYPE;
-import static com.antgroup.geaflow.cluster.k8s.config.K8SConstants.EXIT_WAIT_TIME;
+import static com.antgroup.geaflow.cluster.constants.ClusterConstants.EXIT_WAIT_SECONDS;
 import static com.antgroup.geaflow.cluster.k8s.config.KubernetesConfigKeys.USER_CLASS_ARGS;
 import static com.antgroup.geaflow.cluster.k8s.config.KubernetesConfigKeys.USER_MAIN_CLASS;
 
@@ -36,9 +36,6 @@ import org.apache.commons.lang3.StringEscapeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * This class is an adaptation of Flink's org.apache.flink.kubernetes.taskmanager.KubernetesTaskExecutorRunner.
- */
 public class KubernetesClientRunner {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KubernetesClientRunner.class);
@@ -84,7 +81,7 @@ public class KubernetesClientRunner {
     private void cleanAndExit() {
         LOGGER.info("Try to delete client config map.");
         try {
-            SleepUtils.sleepSecond(EXIT_WAIT_TIME);
+            SleepUtils.sleepSecond(EXIT_WAIT_SECONDS);
             deleteClientConfigMap();
         } catch (Throwable e) {
             LOGGER.error("delete client config map failed: {}", e.getMessage(), e);

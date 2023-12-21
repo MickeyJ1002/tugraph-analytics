@@ -21,6 +21,7 @@ import com.antgroup.geaflow.cluster.clustermanager.ExecutorRegisteredCallback;
 import com.antgroup.geaflow.cluster.clustermanager.IClusterManager;
 import com.antgroup.geaflow.cluster.constants.ClusterConstants;
 import com.antgroup.geaflow.cluster.resourcemanager.allocator.IAllocator;
+import com.antgroup.geaflow.cluster.resourcemanager.allocator.ProcessFairAllocator;
 import com.antgroup.geaflow.cluster.resourcemanager.allocator.RoundRobinAllocator;
 import com.antgroup.geaflow.cluster.system.ClusterMetaStore;
 import com.antgroup.geaflow.cluster.web.metrics.ResourceMetrics;
@@ -62,7 +63,7 @@ public class DefaultResourceManager implements IResourceManager, ExecutorRegiste
     private final Map<IAllocator.AllocateStrategy, IAllocator<String, WorkerInfo>> allocators = new HashMap<>();
     protected final IClusterManager clusterManager;
     protected final ClusterMetaStore metaKeeper;
-    protected int allocatedWorkerNum;
+    protected int totalWorkerNum;
 
     private final Map<WorkerInfo.WorkerId, WorkerInfo> availableWorkers = new HashMap<>();
     private final Map<String, ResourceSession> sessions = new HashMap<>();
@@ -75,6 +76,7 @@ public class DefaultResourceManager implements IResourceManager, ExecutorRegiste
     @Override
     public void init(ResourceManagerContext context) {
         this.allocators.put(IAllocator.AllocateStrategy.ROUND_ROBIN, new RoundRobinAllocator());
+        this.allocators.put(IAllocator.AllocateStrategy.PROCESS_FAIR, new ProcessFairAllocator());
         ClusterContext clusterContext = context.getClusterContext();
         clusterContext.addExecutorRegisteredCallback(this);
 
@@ -82,7 +84,7 @@ public class DefaultResourceManager implements IResourceManager, ExecutorRegiste
         this.recovering.set(isRecover);
         int workerNum = clusterContext.getClusterConfig().getContainerNum()
             * clusterContext.getClusterConfig().getContainerWorkerNum();
-        this.allocatedWorkerNum += workerNum;
+        this.totalWorkerNum += workerNum;
         this.pendingWorkerCounter.set(workerNum);
         LOGGER.info("init worker number {}, isRecover {}", workerNum, isRecover);
         if (isRecover) {
@@ -285,7 +287,6 @@ public class DefaultResourceManager implements IResourceManager, ExecutorRegiste
         List<ResourceSession> sessions = new ArrayList<>(this.sessions.values());
         int used = sessions.stream().mapToInt(s -> s.getWorkers().size()).sum();
         this.metaKeeper.saveWorkers(new WorkerSnapshot(available, sessions));
-        this.metaKeeper.flush();
         LOGGER.info("persist {}/{} workers costs {}ms",
             this.availableWorkers.size(), used, System.currentTimeMillis() - start);
     }
@@ -333,7 +334,7 @@ public class DefaultResourceManager implements IResourceManager, ExecutorRegiste
         ResourceMetrics metrics = new ResourceMetrics();
         metrics.setPendingWorkers(pendingWorkerCounter.get());
         metrics.setAvailableWorkers(availableWorkers.size());
-        metrics.setTotalWorkers(allocatedWorkerNum);
+        metrics.setTotalWorkers(totalWorkerNum);
         return metrics;
     }
 

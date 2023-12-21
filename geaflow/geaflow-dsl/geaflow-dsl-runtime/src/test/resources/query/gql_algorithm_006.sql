@@ -21,7 +21,7 @@ CREATE GRAPH modern (
 	)
 ) WITH (
 	storeType='rocksdb',
-	shardNum = 1
+	shardCount = 1
 );
 
 CREATE TABLE modern_vertex (

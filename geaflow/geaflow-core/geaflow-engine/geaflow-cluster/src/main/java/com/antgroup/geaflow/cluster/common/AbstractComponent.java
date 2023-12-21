@@ -30,12 +30,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public abstract class AbstractComponent {
+
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractComponent.class);
 
     protected int id;
     protected String name;
     protected String masterId;
     protected int rpcPort;
+    protected int supervisorPort;
 
     protected Configuration configuration;
     protected IHAService haService;
@@ -61,7 +63,7 @@ public abstract class AbstractComponent {
         this.haService = HAServiceFactory.getService(configuration);
 
         RpcClient.init(configuration);
-        ClusterMetaStore.init(id, configuration);
+        ClusterMetaStore.init(id, name, configuration);
         StatsCollectorFactory.init(configuration);
     }
 

@@ -67,11 +67,19 @@
         </dependency>
         <dependency>
             <groupId>com.antgroup.tugraph</groupId>
+            <artifactId>geaflow-metrics-prometheus</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.antgroup.tugraph</groupId>
             <artifactId>geaflow-dsl-runtime</artifactId>
         </dependency>
         <dependency>
             <groupId>com.antgroup.tugraph</groupId>
             <artifactId>geaflow-on-ray-community</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.antgroup.tugraph</groupId>
+            <artifactId>geaflow-dashboard</artifactId>
         </dependency>
     </dependencies>
 

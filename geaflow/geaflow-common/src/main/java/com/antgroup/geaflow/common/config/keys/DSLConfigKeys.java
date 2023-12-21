@@ -60,6 +60,11 @@ public class DSLConfigKeys implements Serializable {
         .noDefaultValue()
         .description("The gql query path.");
 
+    public static final ConfigKey GEAFLOW_DSL_PARALLELISM_CONFIG_PATH = ConfigKeys
+        .key("geaflow.dsl.parallelism.config.path")
+        .noDefaultValue()
+        .description("The gql query path.");
+
     public static final ConfigKey GEAFLOW_DSL_CATALOG_TYPE = ConfigKeys
         .key("geaflow.dsl.catalog.type")
         .defaultValue("memory")
@@ -85,4 +90,5 @@ public class DSLConfigKeys implements Serializable {
         .key("geaflow.dsl.traversal.all.split.enable")
         .defaultValue(false)
         .description("Whether enable the split of the ids for traversal all. ");
+
 }

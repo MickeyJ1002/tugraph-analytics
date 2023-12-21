@@ -33,8 +33,7 @@ import com.antgroup.geaflow.cluster.k8s.config.KubernetesConfig.ServiceExposedTy
 import com.antgroup.geaflow.cluster.k8s.config.KubernetesParam;
 import com.antgroup.geaflow.cluster.k8s.utils.KubernetesUtils;
 import com.antgroup.geaflow.common.config.Configuration;
-import com.antgroup.geaflow.file.FileConfigKeys;
-import com.antgroup.geaflow.file.PersistentType;
+import com.antgroup.geaflow.common.utils.FileUtil;
 import com.google.common.base.Preconditions;
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.ConfigMapBuilder;
@@ -119,9 +118,6 @@ public class KubernetesResourceBuilder {
             .addNewEnv()
                 .withName(K8SConstants.ENV_CONTAINER_ID).withValue(containerId).endEnv()
             .addNewEnv()
-                .withName(K8SConstants.ENV_CONTAINER_TYPE).withValue(K8SConstants.ENV_CONTAINER_TYPE_K8S)
-                .endEnv()
-            .addNewEnv()
                 .withName(K8SConstants.ENV_CLUSTER_ID).withValue(clusterName)
                 .endEnv()
             .addNewEnv()
@@ -165,19 +161,6 @@ public class KubernetesResourceBuilder {
                     .withName(K8SConstants.GEAFLOW_CONF_VOLUME)
                     .withMountPath(confDir)
                     .build());
-
-        PersistentType type = PersistentType.valueOf(
-            param.getConfig().getString(FileConfigKeys.PERSISTENT_TYPE).toUpperCase());
-        if (type == PersistentType.LOCAL) {
-            String persistentRoot = config.getString(FileConfigKeys.ROOT);
-            containerBuilder
-                .addNewEnv()
-                    .withName(K8SConstants.ENV_PERSISTENT_ROOT).withValue(persistentRoot).endEnv()
-                .addNewVolumeMount()
-                    .withName(K8SConstants.GEAFLOW_FILE_VOLUME)
-                    .withMountPath(param.getConfig().getString(FileConfigKeys.ROOT))
-                    .endVolumeMount();
-        }
 
         if (dockerNetworkType == DockerNetworkType.BRIDGE) {
             if (param.getRpcPort() > 0) {
@@ -255,7 +238,7 @@ public class KubernetesResourceBuilder {
         if (StringUtils.isNotEmpty(files)) {
             for (String filePath : files.split(CONFIG_LIST_SEPARATOR)) {
                 String fileName = filePath.substring(filePath.lastIndexOf(File.separator) + 1);
-                String fileContent = KubernetesUtils.getContentFromFile(filePath);
+                String fileContent = FileUtil.getContentFromFile(filePath);
                 if (fileContent != null) {
                     configMapBuilder.addToData(fileName, fileContent);
                 } else {
@@ -327,20 +310,6 @@ public class KubernetesResourceBuilder {
                     .endVolume()
             .endSpec();
 
-        PersistentType type = PersistentType.valueOf(
-            param.getConfig().getString(FileConfigKeys.PERSISTENT_TYPE).toUpperCase());
-        if (type == PersistentType.LOCAL) {
-            podBuilder.editSpec()
-                .addNewVolume()
-                    .withName(K8SConstants.GEAFLOW_FILE_VOLUME)
-                    .withNewHostPath()
-                        .withPath(param.getConfig().getString(FileConfigKeys.ROOT))
-                        .withType(K8SConstants.DIRECTORY_OR_CREATE)
-                        .endHostPath()
-                    .endVolume()
-                .endSpec();
-        }
-
         List<NodeSelectorRequirement> matchExpressionsList =
             KubernetesUtils.getMatchExpressions(param.getConfig());
         if (matchExpressionsList.size() > 0) {
@@ -378,6 +347,7 @@ public class KubernetesResourceBuilder {
 
     public static Deployment createDeployment(String clusterId,
                                               String rcName,
+                                              String id,
                                               Container container,
                                               ConfigMap configMap,
                                               KubernetesParam param,
@@ -386,9 +356,13 @@ public class KubernetesResourceBuilder {
         String serviceAccount = param.getServiceAccount();
 
         Map<String, String> labels = param.getPodLabels(clusterId);
+        labels.put(LABEL_COMPONENT_ID_KEY, id);
         Map<String, String> annotations = getAnnotations(param);
+
         List<KeyToPath> configMapItems = configMap.getData().keySet().stream()
             .map(e -> new KeyToPath(e, null, e)).collect(Collectors.toList());
+
+        int replicas = param.enableLeaderElection() ? 2 : 1;
 
         DeploymentBuilder deploymentBuilder = new DeploymentBuilder()
             .editOrNewMetadata()
@@ -396,7 +370,7 @@ public class KubernetesResourceBuilder {
                 .withLabels(labels)
                 .endMetadata()
             .editOrNewSpec()
-                .withReplicas(1)
+                .withReplicas(replicas)
                 .withNewSelector()
                     .addToMatchLabels(labels)
                     .endSelector()
@@ -423,24 +397,6 @@ public class KubernetesResourceBuilder {
                     .endSpec()
                 .endTemplate()
             .endSpec();
-
-        PersistentType type = PersistentType.valueOf(
-            param.getConfig().getString(FileConfigKeys.PERSISTENT_TYPE).toUpperCase());
-        if (type == PersistentType.LOCAL) {
-            deploymentBuilder.editSpec()
-                .editTemplate()
-                    .editSpec()
-                        .addNewVolume()
-                            .withName(K8SConstants.GEAFLOW_FILE_VOLUME)
-                            .withNewHostPath()
-                                .withPath(param.getConfig().getString(FileConfigKeys.ROOT))
-                                .withType(K8SConstants.DIRECTORY_OR_CREATE)
-                                .endHostPath()
-                            .endVolume()
-                        .endSpec()
-                    .endTemplate()
-                .endSpec();
-        }
 
         String dnsDomains = param.getConfig().getString(DNS_SEARCH_DOMAINS);
         if (!StringUtils.isEmpty(dnsDomains)) {
@@ -493,9 +449,8 @@ public class KubernetesResourceBuilder {
             metaBuilder.withOwnerReferences(ownerReference);
         }
         Map<String, String> serviceLabels = param.getServiceLabels();
-        if (serviceLabels != null) {
-            metaBuilder.withLabels(serviceLabels);
-        }
+        serviceLabels.putAll(labels);
+        metaBuilder.withLabels(serviceLabels);
         Map<String, String> serviceAnnotations = param.getServiceAnnotations();
         if (serviceAnnotations != null) {
             metaBuilder.withAnnotations(serviceAnnotations);

@@ -14,30 +14,60 @@
 
 package com.antgroup.geaflow.cluster.rpc.impl;
 
+import com.antgroup.geaflow.cluster.rpc.IAsyncMetricEndpoint;
 import com.antgroup.geaflow.cluster.rpc.IMetricEndpointRef;
-import com.antgroup.geaflow.rpc.proto.MetricServiceGrpc;
-import com.antgroup.geaflow.rpc.proto.MetricServiceGrpc.MetricServiceFutureStub;
+import com.antgroup.geaflow.cluster.rpc.RpcEndpointRefFactory;
+import com.antgroup.geaflow.cluster.rpc.RpcEndpointRefFactory.EndpointRefID;
+import com.antgroup.geaflow.cluster.rpc.RpcEndpointRefFactory.EndpointType;
+import com.antgroup.geaflow.cluster.rpc.RpcUtil;
+import com.antgroup.geaflow.common.config.Configuration;
 import com.antgroup.geaflow.rpc.proto.Metrics.MetricQueryRequest;
 import com.antgroup.geaflow.rpc.proto.Metrics.MetricQueryResponse;
-import com.google.common.util.concurrent.ListenableFuture;
-import io.grpc.ManagedChannel;
-import java.util.concurrent.ExecutorService;
+import com.baidu.brpc.client.BrpcProxy;
+import com.baidu.brpc.client.RpcClientOptions;
+import com.baidu.brpc.loadbalance.LoadBalanceStrategy;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 
 public class MetricEndpointRef extends AbstractRpcEndpointRef implements IMetricEndpointRef {
-    private MetricServiceFutureStub stub;
 
-    public MetricEndpointRef(String host, int port, ExecutorService executorService) {
-        super(host, port, executorService);
+    private IAsyncMetricEndpoint metricEndpoint;
+    private final EndpointRefID refID;
+
+    public MetricEndpointRef(String host, int port, Configuration configuration) {
+        super(host, port, configuration);
+        this.refID = new EndpointRefID(host, port, EndpointType.METRIC);
     }
 
     @Override
-    protected void createStub(ManagedChannel channel) {
-        this.stub = MetricServiceGrpc.newFutureStub(channel);
+    protected void getRpcEndpoint() {
+        this.metricEndpoint = BrpcProxy.getProxy(rpcClient, IAsyncMetricEndpoint.class);
     }
 
     @Override
-    public ListenableFuture<MetricQueryResponse> queryMetrics(MetricQueryRequest request) {
-        ensureChannelAlive();
-        return stub.queryMetrics(request);
+    protected RpcClientOptions getClientOptions() {
+        RpcClientOptions options = super.getClientOptions();
+        options.setGlobalThreadPoolSharing(false);
+        options.setMaxTotalConnections(2);
+        options.setMinIdleConnections(1);
+        options.setIoThreadNum(1);
+        options.setWorkThreadNum(1);
+        options.setLoadBalanceType(LoadBalanceStrategy.LOAD_BALANCE_ROUND_ROBIN);
+        return options;
     }
+
+    @Override
+    public Future<MetricQueryResponse> queryMetrics(MetricQueryRequest request, RpcCallback<MetricQueryResponse> callback) {
+        CompletableFuture<MetricQueryResponse> result = new CompletableFuture<>();
+        com.baidu.brpc.client.RpcCallback<MetricQueryResponse> rpcCallback =
+            RpcUtil.buildRpcCallback(callback, result);
+        try {
+            this.metricEndpoint.queryMetrics(request, rpcCallback);
+        } catch (Throwable e) {
+            rpcCallback.fail(e);
+            RpcEndpointRefFactory.getInstance().invalidateRef(refID);
+        }
+        return result;
+    }
+
 }

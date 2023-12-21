@@ -79,8 +79,8 @@ public class KubernetesJobClient {
             // create container
             String podName = clusterId + CLIENT_NAME_SUFFIX;
             Container container = KubernetesResourceBuilder
-                .createContainer(podName, podName, null, clientParam,
-                    clientParam.getContainerShellCommand(), clientParam.getAdditionEnvs(),
+                .createContainer(podName, podName, null,
+                    clientParam, clientParam.getContainerShellCommand(), clientParam.getAdditionEnvs(),
                     dockerNetworkType);
 
             // create ownerReference

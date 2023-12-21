@@ -25,10 +25,6 @@ public interface IContainerEndpointRef extends Serializable {
     /**
      * Process event request.
      */
-    Future<IEvent> process(IEvent request);
+    Future<IEvent> process(IEvent request, RpcCallback<Response> callback);
 
-    /**
-     * Process event request with callback.
-     */
-    void process(IEvent request, RpcCallback<Response> callback);
 }

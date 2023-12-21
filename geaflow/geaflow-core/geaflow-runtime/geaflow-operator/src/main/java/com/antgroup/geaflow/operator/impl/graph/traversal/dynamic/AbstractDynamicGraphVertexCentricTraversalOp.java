@@ -73,7 +73,7 @@ public abstract class AbstractDynamicGraphVertexCentricTraversalOp<K, VV, EV, M,
         super.open(opContext);
 
         this.incVcTraversalFunction = this.function.getIncTraversalFunction();
-        this.graphVCTraversalCtx = new IncGraphVCTraversalCtxImpl(messageCollector);
+        this.graphVCTraversalCtx = new IncGraphVCTraversalCtxImpl(getIdentify(), messageCollector);
         this.incVcTraversalFunction.open(this.graphVCTraversalCtx);
 
         this.invokeVIds = new HashSet<>();
@@ -103,6 +103,7 @@ public abstract class AbstractDynamicGraphVertexCentricTraversalOp<K, VV, EV, M,
             this.graphMsgBox.processInMessage(new MsgProcessFunc<K, M>() {
                 @Override
                 public void process(K vertexId, List<M> messages) {
+                    invokeVIds.add(vertexId);
                     graphVCTraversalCtx.init(iterations, vertexId);
                     incVcTraversalFunction.compute(vertexId, messages.iterator());
                 }
@@ -147,7 +148,10 @@ public abstract class AbstractDynamicGraphVertexCentricTraversalOp<K, VV, EV, M,
         this.temporaryGraphCache.clear();
         this.invokeVIds.clear();
         this.traversalRequests.clear();
-        this.temporaryGraphCache.clear();
+
+        LOGGER.info("incVcTraversalFunction finish, windowId:{}, invokeIds size:{}", this.windowId, this.invokeVIds.size());
+        incVcTraversalFunction.finish();
+        LOGGER.info("incVcTraversalFunction has finish windowId:{}", this.windowId);
 
         for (ITraversalResponse<R> response : this.responses) {
             responseCollector.partition(response.getResponseId(), response);
@@ -155,11 +159,13 @@ public abstract class AbstractDynamicGraphVertexCentricTraversalOp<K, VV, EV, M,
         responseCollector.finish();
         responses.clear();
         checkpoint();
+        LOGGER.info("TraversalOp has finish windowId:{}", this.windowId);
     }
 
     @Override
     public void close() {
         super.close();
+        incVcTraversalFunction.close();
         this.responses.clear();
     }
 
@@ -167,11 +173,13 @@ public abstract class AbstractDynamicGraphVertexCentricTraversalOp<K, VV, EV, M,
         implements IncVertexCentricTraversalFuncContext<K, VV, EV, M, R> {
 
         private final ICollector<IGraphMessage<K, M>> messageCollector;
-
+        private final String opName;
         private final TraversalHistoricalGraph<K, VV, EV> traversalHistoricalGraph;
 
-        protected IncGraphVCTraversalCtxImpl(ICollector<IGraphMessage<K, M>> messageCollector) {
+        protected IncGraphVCTraversalCtxImpl(String opName,
+                                             ICollector<IGraphMessage<K, M>> messageCollector) {
             super(opContext, runtimeContext, graphState, temporaryGraphCache, graphMsgBox, maxIterations);
+            this.opName = opName;
             this.messageCollector = messageCollector;
             this.traversalHistoricalGraph = new TraversalIncHistoricalGraph<>(
                 (IncHistoricalGraph<K, VV, EV>) super.getHistoricalGraph());
@@ -195,6 +203,11 @@ public abstract class AbstractDynamicGraphVertexCentricTraversalOp<K, VV, EV, M,
         @Override
         public TraversalHistoricalGraph<K, VV, EV> getHistoricalGraph() {
             return traversalHistoricalGraph;
+        }
+
+        @Override
+        public String getTraversalOpName() {
+            return opName;
         }
     }
 

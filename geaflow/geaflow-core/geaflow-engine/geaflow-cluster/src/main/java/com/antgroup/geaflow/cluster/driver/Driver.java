@@ -26,13 +26,18 @@ import com.antgroup.geaflow.cluster.rpc.impl.DriverEndpoint;
 import com.antgroup.geaflow.cluster.rpc.impl.PipelineMasterEndpoint;
 import com.antgroup.geaflow.cluster.rpc.impl.RpcServiceImpl;
 import com.antgroup.geaflow.common.exception.GeaflowRuntimeException;
+import com.antgroup.geaflow.common.rpc.ConfigurableServerOption;
+import com.antgroup.geaflow.common.utils.PortUtil;
 import com.antgroup.geaflow.common.utils.ThreadUtil;
 import com.antgroup.geaflow.pipeline.Pipeline;
 import com.antgroup.geaflow.pipeline.callback.TaskCallBack;
 import com.antgroup.geaflow.pipeline.service.PipelineService;
 import com.antgroup.geaflow.pipeline.task.PipelineTask;
 import com.antgroup.geaflow.shuffle.service.ShuffleManager;
+import com.baidu.brpc.server.RpcServerOptions;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -52,6 +57,7 @@ public class Driver extends AbstractContainer implements IDriver<IEvent, Boolean
     private DriverEventDispatcher eventDispatcher;
     private DriverContext driverContext;
     private ExecutorService executorService;
+    private Map<PipelineService, IPipelineExecutor> pipelineExecutorMap;
 
     public Driver() {
         this(0);
@@ -70,6 +76,7 @@ public class Driver extends AbstractContainer implements IDriver<IEvent, Boolean
         this.executorService = Executors.newFixedThreadPool(
             1,
             ThreadUtil.namedThreadFactory(true, DRIVER_EXECUTOR, new ComponentUncaughtExceptionHandler()));
+        this.pipelineExecutorMap = new HashMap<>();
 
         ExecutionIdGenerator.init(id);
         ShuffleManager.getInstance().initShuffleMaster();
@@ -84,7 +91,8 @@ public class Driver extends AbstractContainer implements IDriver<IEvent, Boolean
 
     @Override
     protected void startRpcService() {
-        this.rpcService = new RpcServiceImpl(rpcPort, configuration);
+        RpcServerOptions serverOptions = ConfigurableServerOption.build(configuration);
+        this.rpcService = new RpcServiceImpl(PortUtil.getPort(rpcPort), serverOptions);
         this.rpcService.addEndpoint(new DriverEndpoint(this));
         this.rpcService.addEndpoint(new PipelineMasterEndpoint(this));
         this.rpcPort = rpcService.startService();
@@ -108,7 +116,7 @@ public class Driver extends AbstractContainer implements IDriver<IEvent, Boolean
             driverContext.checkpoint(new DriverContext.PipelineCheckpointFunction());
 
             IPipelineExecutor pipelineExecutor = PipelineExecutorFactory.createPipelineExecutor();
-            PipelineExecutorContext executorContext = new PipelineExecutorContext(name,
+            PipelineExecutorContext executorContext = new PipelineExecutorContext(name, driverContext.getIndex(),
                 eventDispatcher, configuration, pipelineTaskIdGenerator);
             pipelineExecutor.init(executorContext);
             pipelineExecutor.register(pipeline.getViewDescMap());
@@ -127,6 +135,7 @@ public class Driver extends AbstractContainer implements IDriver<IEvent, Boolean
             List<PipelineService> pipelineServices = pipeline.getPipelineServices();
             for (PipelineService pipelineService : pipelineServices) {
                 LOGGER.info("execute service");
+                pipelineExecutorMap.put(pipelineService, pipelineExecutor);
                 pipelineExecutor.startPipelineService(pipelineService);
             }
             LOGGER.info("finish execute pipeline {}", pipeline);
@@ -146,15 +155,20 @@ public class Driver extends AbstractContainer implements IDriver<IEvent, Boolean
 
     @Override
     public void close() {
-        super.close();
         executorService.shutdownNow();
+        for (PipelineService service : pipelineExecutorMap.keySet()) {
+            pipelineExecutorMap.get(service).stopPipelineService(service);
+        }
+        pipelineExecutorMap.clear();
+
+        super.close();
         LOGGER.info("driver {} closed", name);
     }
 
     @Override
     protected DriverInfo buildComponentInfo() {
         DriverInfo driverInfo = new DriverInfo();
-        buildComponentInfo(driverInfo);
+        fillComponentInfo(driverInfo);
         return driverInfo;
     }
 }

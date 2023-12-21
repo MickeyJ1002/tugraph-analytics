@@ -27,7 +27,7 @@ import com.antgroup.geaflow.cluster.clustermanager.IClusterManager;
 import com.antgroup.geaflow.cluster.config.ClusterConfig;
 import com.antgroup.geaflow.cluster.container.ContainerInfo;
 import com.antgroup.geaflow.cluster.master.MasterContext;
-import com.antgroup.geaflow.cluster.rpc.RpcAddress;
+import com.antgroup.geaflow.cluster.rpc.ConnectAddress;
 import com.antgroup.geaflow.cluster.system.ClusterMetaStore;
 import com.antgroup.geaflow.common.config.Configuration;
 import com.antgroup.geaflow.common.exception.GeaflowRuntimeException;
@@ -67,7 +67,7 @@ public class DefaultResourceManagerTest {
     public void testAllocateWithWorkerEqUserDefinedWorker() {
         config.put(CONTAINER_WORKER_NUM.getKey(), String.valueOf(5));
         config.put(JOB_UNIQUE_ID.getKey(), "geaflow12345");
-        ClusterMetaStore.init(0, config);
+        ClusterMetaStore.init(0, "master-0", config);
         ClusterContext clusterContext = new ClusterContext(config);
         MockClusterManager clusterManager = new MockClusterManager();
         clusterManager.init(clusterContext);
@@ -94,7 +94,7 @@ public class DefaultResourceManagerTest {
     public void testAllocateWithWorkerGtUserDefinedWorker() {
         config.put(JOB_UNIQUE_ID.getKey(), "geaflow23456");
         config.put(CONTAINER_WORKER_NUM.getKey(), String.valueOf(20));
-        ClusterMetaStore.init(0, config);
+        ClusterMetaStore.init(0, "master-0", config);
         ClusterContext clusterContext = new ClusterContext(config);
         MockClusterManager clusterManager = new MockClusterManager();
         clusterManager.init(clusterContext);
@@ -126,7 +126,7 @@ public class DefaultResourceManagerTest {
         config.put(JOB_UNIQUE_ID.getKey(), "geaflow23456");
         config.put(CONTAINER_NUM.getKey(), String.valueOf(4));
         config.put(CONTAINER_WORKER_NUM.getKey(), String.valueOf(5));
-        ClusterMetaStore.init(0, config);
+        ClusterMetaStore.init(0, "master-0", config);
         ClusterContext clusterContext = new ClusterContext(config);
         MockClusterManager clusterManager = new MockClusterManager();
         clusterManager.init(clusterContext);
@@ -161,7 +161,7 @@ public class DefaultResourceManagerTest {
     public void testAllocateAndRelease() {
         config.put(JOB_UNIQUE_ID.getKey(), "geaflow23456");
         config.put(CONTAINER_WORKER_NUM.getKey(), String.valueOf(20));
-        ClusterMetaStore.init(0, config);
+        ClusterMetaStore.init(0, "master-0", config);
         ClusterContext clusterContext = new ClusterContext(config);
         MockClusterManager clusterManager = new MockClusterManager();
         clusterManager.init(clusterContext);
@@ -208,7 +208,7 @@ public class DefaultResourceManagerTest {
     public void testAllocateAndReleaseFail() {
         config.put(JOB_UNIQUE_ID.getKey(), "geaflow23456");
         config.put(CONTAINER_WORKER_NUM.getKey(), String.valueOf(20));
-        ClusterMetaStore.init(0, config);
+        ClusterMetaStore.init(0, "master-0", config);
         ClusterContext clusterContext = new ClusterContext(config);
         MockClusterManager clusterManager = new MockClusterManager();
         clusterManager.init(clusterContext);
@@ -242,7 +242,7 @@ public class DefaultResourceManagerTest {
     public void testReleaseException() {
         config.put(JOB_UNIQUE_ID.getKey(), "geaflow23456");
         config.put(CONTAINER_WORKER_NUM.getKey(), String.valueOf(20));
-        ClusterMetaStore.init(0, config);
+        ClusterMetaStore.init(0, "master-0", config);
         ClusterContext clusterContext = new ClusterContext(config);
         MockClusterManager clusterManager = new MockClusterManager();
         clusterManager.init(clusterContext);
@@ -271,7 +271,7 @@ public class DefaultResourceManagerTest {
     public void testAllocateWithIllegalNum() {
         config.put(CONTAINER_WORKER_NUM.getKey(), String.valueOf(5));
         config.put(JOB_UNIQUE_ID.getKey(), "geaflow12345");
-        ClusterMetaStore.init(0, config);
+        ClusterMetaStore.init(0, "master-0", config);
         ClusterContext clusterContext = new ClusterContext(config);
         MockClusterManager clusterManager = new MockClusterManager();
         clusterManager.init(clusterContext);
@@ -294,7 +294,7 @@ public class DefaultResourceManagerTest {
     public void testReleaseWithIllegalResourceId() {
         config.put(CONTAINER_WORKER_NUM.getKey(), String.valueOf(5));
         config.put(JOB_UNIQUE_ID.getKey(), "geaflow12345");
-        ClusterMetaStore.init(0, config);
+        ClusterMetaStore.init(0, "master-0", config);
         ClusterContext clusterContext = new ClusterContext(config);
         MockClusterManager clusterManager = new MockClusterManager();
         clusterManager.init(clusterContext);
@@ -320,7 +320,7 @@ public class DefaultResourceManagerTest {
     public void testAllocateWithOneRequireId() {
         config.put(JOB_UNIQUE_ID.getKey(), "geaflow23456");
         config.put(CONTAINER_WORKER_NUM.getKey(), String.valueOf(5));
-        ClusterMetaStore.init(0, config);
+        ClusterMetaStore.init(0, "master-0", config);
         ClusterContext clusterContext = new ClusterContext(config);
         MockClusterManager clusterManager = new MockClusterManager();
         clusterManager.init(clusterContext);
@@ -349,7 +349,7 @@ public class DefaultResourceManagerTest {
     public void testAllocateWithOneRequireIdFail() {
         config.put(JOB_UNIQUE_ID.getKey(), "geaflow23456");
         config.put(CONTAINER_WORKER_NUM.getKey(), String.valueOf(5));
-        ClusterMetaStore.init(0, config);
+        ClusterMetaStore.init(0, "master-0", config);
         ClusterContext clusterContext = new ClusterContext(config);
         MockClusterManager clusterManager = new MockClusterManager();
         clusterManager.init(clusterContext);
@@ -377,7 +377,7 @@ public class DefaultResourceManagerTest {
     public void testRecoverWithWorkerGtUserDefinedWorker() {
         config.put(JOB_UNIQUE_ID.getKey(), "geaflow23456");
         config.put(CONTAINER_WORKER_NUM.getKey(), String.valueOf(20));
-        ClusterMetaStore.init(0, config);
+        ClusterMetaStore.init(0, "master-0", config);
         ClusterContext clusterContext = new ClusterContext(config);
         MockRecoverClusterManager clusterManager = new MockRecoverClusterManager();
         clusterManager.init(clusterContext);
@@ -423,7 +423,7 @@ public class DefaultResourceManagerTest {
         config.put(JOB_UNIQUE_ID.getKey(), "geaflow23456");
         config.put(CONTAINER_WORKER_NUM.getKey(), String.valueOf(5));
         config.put(CONTAINER_NUM.getKey(), String.valueOf(4));
-        ClusterMetaStore.init(0, config);
+        ClusterMetaStore.init(0, "master-0", config);
         ClusterContext clusterContext = new ClusterContext(config);
         MockRecoverClusterManager clusterManager = new MockRecoverClusterManager();
         clusterManager.init(clusterContext);
@@ -473,7 +473,7 @@ public class DefaultResourceManagerTest {
         config.put(JOB_UNIQUE_ID.getKey(), "geaflow23456");
         config.put(CONTAINER_NUM.getKey(), String.valueOf(4));
         config.put(CONTAINER_WORKER_NUM.getKey(), String.valueOf(5));
-        ClusterMetaStore.init(0, config);
+        ClusterMetaStore.init(0, "master-0", config);
         ClusterContext clusterContext = new ClusterContext(config);
         MockRecoverClusterManager clusterManager = new MockRecoverClusterManager();
         clusterManager.init(clusterContext);
@@ -574,7 +574,7 @@ public class DefaultResourceManagerTest {
         List<WorkerInfo> workers = new ArrayList<>();
         for (Integer workerIndex : executorIds) {
             WorkerInfo worker = WorkerInfo.build(
-                host, rpcPort, shufflePort, processId, workerIndex, containerName);
+                host, rpcPort, shufflePort, processId, 0, workerIndex, containerName);
             workers.add(worker);
         }
         return workers;
@@ -601,7 +601,7 @@ public class DefaultResourceManagerTest {
         }
 
         @Override
-        public Map<String, RpcAddress> startDrivers() {
+        public Map<String, ConnectAddress> startDrivers() {
             return null;
         }
 
@@ -616,10 +616,6 @@ public class DefaultResourceManagerTest {
                     left -= this.containerWorkerNum;
                 }
             });
-        }
-
-        @Override
-        public void restartContainer(int containerId) {
         }
 
         @Override
